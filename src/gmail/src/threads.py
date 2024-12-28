@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Pattern, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
@@ -23,21 +23,8 @@ class GmailThreadExtractor:
 
     SCOPES: ClassVar[List[str]] = ["https://www.googleapis.com/auth/gmail.readonly"]
     MAX_RETRIES: ClassVar[int] = 3
-    EMAIL_REGEX: ClassVar[Pattern[str]] = re.compile(r"^[a-zA-Z0-9._%+-]+@gmail.com$")
 
-    def _validate_email(self, email_address: str) -> None:
-        """Validate email format.
-
-        :param email_address: Email address to validate.
-        """
-        if not isinstance(email_address, str):
-            raise TypeError("Email must be a string")
-        if not email_address or not email_address.strip():
-            raise ValueError("Email cannot be empty")
-        if not self.EMAIL_REGEX.match(email_address):
-            raise ValueError(f"Invalid GMAIL email format: {email_address}")
-
-    def _setup_paths(self, root_dir: Path, user_email: str) -> None:
+    def _setup_paths(self, root_dir: Path, email_address: str) -> None:
         """Set up necessary paths and directories.
 
         :param root_dir: Project root directory.
@@ -49,22 +36,22 @@ class GmailThreadExtractor:
             raise FileNotFoundError("Credentials file not found")
 
         # Create user directory with URL-safe email as folder name
-        safe_email = quote_plus(user_email)
+        safe_email = quote_plus(email_address)
         credentials_user_dir = root_dir / "gmail/credentials" / safe_email
         data_user_dir = root_dir / "gmail/data" / safe_email
 
         try:
             credentials_user_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created/verified user directory at: {credentials_user_dir}")
+            logger.info("Created/verified user directory at: {credentials_user_dir}", credentials_user_dir=credentials_user_dir)
         except Exception as e:
-            logger.error(f"Failed to create user directory: {e}")
+            logger.error("Failed to create user directory: {error}", error=str(e))
             raise
 
         try:
             data_user_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created/verified user directory at: {data_user_dir}")
+            logger.info("Created/verified user directory at: {data_user_dir}", data_user_dir=data_user_dir)
         except Exception as e:
-            logger.error(f"Failed to create user directory: {e}")
+            logger.error("Failed to create user directory: {error}", error=str(e))
             raise
 
         # Set up token path
@@ -78,12 +65,12 @@ class GmailThreadExtractor:
                 return build("gmail", "v1", credentials=self.creds)
             except HttpError as e:
                 if attempt == self.MAX_RETRIES - 1:
-                    logger.error(f"Failed to initialize Gmail service after {self.MAX_RETRIES} attempts")
+                    logger.error("Failed to initialize Gmail service after {max_retries} attempts", max_retries=self.MAX_RETRIES)
                     raise
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                logger.warning("Attempt {attempt} failed: {error}", attempt=attempt + 1, error=str(e))
                 continue
             except Exception as e:
-                logger.error(f"Unexpected error initializing Gmail service: {e}")
+                logger.error("Unexpected error initializing Gmail service: {error}", error=str(e))
                 raise
 
     def _get_credentials(self) -> Optional[Credentials]:
@@ -143,7 +130,7 @@ class GmailThreadExtractor:
 
             return text
         except Exception as e:
-            logger.warning(f"Failed to parse HTML content: {e}")
+            logger.warning("Failed to parse HTML content: {error}", error=str(e))
             return html_content
 
     def _get_message_body(self, payload: Dict[str, Any]) -> str:
@@ -178,20 +165,18 @@ class GmailThreadExtractor:
 
         return ""
 
-    def get_threads(self, user_email: str, max_results: Optional[int] = None) -> None:
+    def get_threads(self, email_address: str, max_results: Optional[int] = None) -> None:
         """Fetch and save Gmail threads matching the specified query.
 
-        :param user_email: user email address.
+        :param email_address: user email address.
         :param max_results: Maximum number of threads to return.
         """
-        # Validate email
-        self._validate_email(user_email)
 
         # Get the project root directory (where pyproject.toml is located)
         root_dir = Path(__file__).parent.parent.parent
 
         # Set up paths
-        self._setup_paths(root_dir=root_dir, user_email=user_email)
+        self._setup_paths(root_dir=root_dir, email_address=email_address)
 
         # Initialize API client
         self.creds = self._get_credentials()
@@ -201,7 +186,7 @@ class GmailThreadExtractor:
             results = (
                 self.service.users()
                 .threads()
-                .list(userId="me", maxResults=max_results, q=f"from:{user_email} in:anywhere")
+                .list(userId="me", maxResults=max_results, q=f"from:{email_address} in:anywhere")
                 .execute()
             )
 
@@ -221,10 +206,10 @@ class GmailThreadExtractor:
 
             with open(self.data_path, "w") as f:
                 json.dump(detailed_threads, f, indent=4, ensure_ascii=False)
-            logger.info(f"Saved {len(detailed_threads)} threads to threads.json")
+            logger.info("Saved {length} threads to threads.json", length=len(detailed_threads))
 
         except Exception as e:
-            logger.error(f"Error fetching threads: {e!s}")
+            logger.error("Error fetching threads: {error}", error=str(e))
 
     def _parse_message(self, message: Dict[str, Any]) -> Dict[str, Union[str, bool]]:
         """Parse a message within a thread.
