@@ -79,7 +79,7 @@ class GmailThreadExtractor:
         try:
             creds = Credentials.from_authorized_user_file(self.token_path, self.SCOPES)  # type: ignore[no-untyped-call]
         except Exception:
-            logger.error("Failed to load existing token")
+            logger.warning("Failed to load existing token")
             pass
 
         # If credentials are expired or don't exist, refresh or create new ones
@@ -159,11 +159,11 @@ class GmailThreadExtractor:
                 .list(userId="me", maxResults=max_results, q=f"from:{self.email_address} in:anywhere")
                 .execute()
             )
-
             threads = results.get("threads", [])
+
             detailed_threads = [
                 {
-                    "id": thread_data["id"],
+                    "thread_id": thread_data["id"],
                     "messages": [self._parse_message(msg) for msg in thread_data["messages"]],
                     "messageCount": len(thread_data["messages"]),
                 }
@@ -202,7 +202,7 @@ class GmailThreadExtractor:
         )
 
         return {
-            "id": message["id"],
+            "message_id": message["id"],
             "subject": subject,
             "from": next((h["value"] for h in headers if h["name"].lower() == "from"), ""),
             "to": next((h["value"] for h in headers if h["name"].lower() == "to"), ""),

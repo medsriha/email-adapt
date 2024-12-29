@@ -89,13 +89,13 @@ class OpenAIMessageBuilder:
         :param threads: The list of threads to process.
         """
         for thread in threads:
-            body_reference_path = self.references_dir / f"{thread['id']}.txt"
+            body_reference_path = self.references_dir / f"{thread['thread_id']}.txt"
 
             # Initialize with thread ID
-            body_reference = {"thread_id": thread["id"]}
-
+            body_reference = {"thread_id": thread["thread_id"]}
+            counter = 1
             # Find all valid emails in thread
-            for index, email in enumerate(thread.get("messages", []), 1):
+            for email in thread.get("messages", []):
                 _, email_address = self._parse_from_field(email.get("from", ""))
 
                 # Skip if not from the user
@@ -115,19 +115,19 @@ class OpenAIMessageBuilder:
                     not any(prohibited_subject in subject for prohibited_subject in self.PROHIBITED_SUBJECTS)
                     and not is_forwarded
                 ):
-                    body_reference[f"body_reference_{index}"] = {
+                    body_reference[f"body_reference_{counter}"] = {
                         "content": cleaned_body,
                         "cost": self._get_token_count(cleaned_body),
                     }
-
+                    counter += 1
             # Save if we found any valid references
             if len(body_reference) > 1:  # More than just thread_id
                 try:
                     with open(body_reference_path, "w", encoding="utf-8") as file:
                         json.dump(body_reference, file, indent=4, ensure_ascii=False)
-                    logger.debug(f"Stored body reference for thread {thread['id']} at {body_reference_path}")
+                    logger.debug(f"Stored body reference for thread {thread['thread_id']} at {body_reference_path}")
                 except Exception as e:
-                    logger.error(f"Failed to store body reference for thread {thread['id']}: {e}")
+                    logger.error(f"Failed to store body reference for thread {thread['thread_id']}: {e}")
 
     @staticmethod
     def _clean_text(text: str) -> str:
