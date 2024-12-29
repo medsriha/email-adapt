@@ -217,8 +217,3 @@ Body: {cleaned_body}""",
         self._store_body_reference(threads)
 
         return messages
-
-
-if __name__ == "__main__":
-    builder = OpenAIMessageBuilder(email_address="medsriha@gmail.com")
-    builder.build_message()
