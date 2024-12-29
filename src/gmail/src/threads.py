@@ -1,9 +1,8 @@
 import base64
 import json
 import logging
-import re
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Pattern, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
@@ -23,53 +22,39 @@ class GmailThreadExtractor:
 
     SCOPES: ClassVar[List[str]] = ["https://www.googleapis.com/auth/gmail.readonly"]
     MAX_RETRIES: ClassVar[int] = 3
-    EMAIL_REGEX: ClassVar[Pattern[str]] = re.compile(r"^[a-zA-Z0-9._%+-]+@gmail.com$")
+    MIME_TYPE_PLAIN = "text/plain"
+    MIME_TYPE_HTML = "text/html"
 
-    def _validate_email(self, email_address: str) -> None:
-        """Validate email format.
+    def __init__(self, email_address: str) -> None:
+        """Initialize the extractor with email and optional root directory."""
+        self.email_address = email_address
+        self.root_dir = Path(__file__).parent.parent.parent
+        self._setup_paths()
+        self.creds = self._get_credentials()
+        self.service = self._initialize_service()
 
-        :param email_address: Email address to validate.
-        """
-        if not isinstance(email_address, str):
-            raise TypeError("Email must be a string")
-        if not email_address or not email_address.strip():
-            raise ValueError("Email cannot be empty")
-        if not self.EMAIL_REGEX.match(email_address):
-            raise ValueError(f"Invalid GMAIL email format: {email_address}")
+    def _setup_paths(self) -> None:
+        """Set up necessary paths and directories."""
+        safe_email = quote_plus(self.email_address)
 
-    def _setup_paths(self, root_dir: Path, user_email: str) -> None:
-        """Set up necessary paths and directories.
+        # Define all paths
+        self.credentials_path = self.root_dir / "gmail/credentials/credentials.json"
+        self.credentials_user_dir = self.root_dir / "gmail/credentials" / safe_email
+        self.data_user_dir = self.root_dir / "gmail/data" / safe_email
+        self.token_path = self.credentials_user_dir / "token.json"
+        self.data_path = self.data_user_dir / "threads.json"
 
-        :param root_dir: Project root directory.
-
-        """
-        # Set up credentials path
-        self.credentials_path = root_dir / "gmail/credentials/credentials.json"
         if not self.credentials_path.exists():
-            raise FileNotFoundError("Credentials file not found")
+            raise FileNotFoundError(f"Credentials file not found at {self.credentials_path}")
 
-        # Create user directory with URL-safe email as folder name
-        safe_email = quote_plus(user_email)
-        credentials_user_dir = root_dir / "gmail/credentials" / safe_email
-        data_user_dir = root_dir / "gmail/data" / safe_email
-
-        try:
-            credentials_user_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created/verified user directory at: {credentials_user_dir}")
-        except Exception as e:
-            logger.error(f"Failed to create user directory: {e}")
-            raise
-
-        try:
-            data_user_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created/verified user directory at: {data_user_dir}")
-        except Exception as e:
-            logger.error(f"Failed to create user directory: {e}")
-            raise
-
-        # Set up token path
-        self.token_path = credentials_user_dir / "token.json"
-        self.data_path = data_user_dir / "threads.json"
+        # Create directories
+        for directory in (self.credentials_user_dir, self.data_user_dir):
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created/verified directory at: {directory}")
+            except Exception as e:
+                logger.error(f"Failed to create directory {directory}: {e}")
+                raise
 
     def _initialize_service(self) -> Resource:
         """Initialize the Gmail API service with retry logic."""
@@ -147,84 +132,56 @@ class GmailThreadExtractor:
             return html_content
 
     def _get_message_body(self, payload: Dict[str, Any]) -> str:
-        """Extract the message body from the payload.
-
-        :param payload: Gmail message payload.
-        """
-        if "parts" in payload:
-            # Try to find plain text first
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/plain":
-                    if "data" in part["body"]:
-                        return base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
-                    return ""
-
-            # If no plain text, try HTML
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/html":
-                    if "data" in part["body"]:
-                        html_content = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
-                        return self._extract_text_from_html(html_content)
-                    return ""
-
-            # If neither found, recurse into first part
-            return self._get_message_body(payload["parts"][0])
-
+        """Extract the message body from the payload recursively."""
         if "body" in payload and "data" in payload["body"]:
             content = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
-            if payload.get("mimeType") == "text/html":
-                return self._extract_text_from_html(content)
-            return content
+            return self._extract_text_from_html(content) if payload.get("mimeType") == self.MIME_TYPE_HTML else content
 
-        return ""
+        if "parts" not in payload:
+            return ""
 
-    def get_threads(self, user_email: str, max_results: Optional[int] = None) -> None:
-        """Fetch and save Gmail threads matching the specified query.
+        # Process parts in order of preference
+        for mime_type in (self.MIME_TYPE_PLAIN, self.MIME_TYPE_HTML):
+            for part in payload["parts"]:
+                if part["mimeType"] == mime_type and "data" in part.get("body", {}):
+                    content = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+                    return self._extract_text_from_html(content) if mime_type == self.MIME_TYPE_HTML else content
 
-        :param user_email: user email address.
-        :param max_results: Maximum number of threads to return.
-        """
-        # Validate email
-        self._validate_email(user_email)
+        # If no suitable part found, recurse into first part
+        return self._get_message_body(payload["parts"][0]) if payload["parts"] else ""
 
-        # Get the project root directory (where pyproject.toml is located)
-        root_dir = Path(__file__).parent.parent.parent
-
-        # Set up paths
-        self._setup_paths(root_dir=root_dir, user_email=user_email)
-
-        # Initialize API client
-        self.creds = self._get_credentials()
-        self.service = self._initialize_service()
-
+    def get_threads(self, max_results: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Fetch Gmail threads matching the specified query and return them."""
         try:
             results = (
                 self.service.users()
                 .threads()
-                .list(userId="me", maxResults=max_results, q=f"from:{user_email} in:anywhere")
+                .list(userId="me", maxResults=max_results, q=f"from:{self.email_address} in:anywhere")
                 .execute()
             )
 
             threads = results.get("threads", [])
-
-            detailed_threads = []
-            for thread in threads:
-                thread_data = self.service.users().threads().get(userId="me", id=thread["id"]).execute()
-
-                detailed_threads.append(
-                    {
-                        "id": thread_data["id"],
-                        "messages": [self._parse_message(msg) for msg in thread_data["messages"]],
-                        "messageCount": len(thread_data["messages"]),
-                    }
+            detailed_threads = [
+                {
+                    "id": thread_data["id"],
+                    "messages": [self._parse_message(msg) for msg in thread_data["messages"]],
+                    "messageCount": len(thread_data["messages"]),
+                }
+                for thread_data in (
+                    self.service.users().threads().get(userId="me", id=thread["id"]).execute() for thread in threads
                 )
+            ]
 
-            with open(self.data_path, "w") as f:
+            # Save to file
+            with open(self.data_path, "w", encoding="utf-8") as f:
                 json.dump(detailed_threads, f, indent=4, ensure_ascii=False)
-            logger.info(f"Saved {len(detailed_threads)} threads to threads.json")
+            logger.info(f"Saved {len(detailed_threads)} threads to {self.data_path}")
+
+            return detailed_threads
 
         except Exception as e:
-            logger.error(f"Error fetching threads: {e!s}")
+            logger.error(f"Error fetching threads: {e}")
+            raise
 
     def _parse_message(self, message: Dict[str, Any]) -> Dict[str, Union[str, bool]]:
         """Parse a message within a thread.
@@ -247,7 +204,8 @@ class GmailThreadExtractor:
         return {
             "id": message["id"],
             "subject": subject,
-            "from": next((h["value"] for h in headers if h["name"].lower() == "from"), "Unknown"),
+            "from": next((h["value"] for h in headers if h["name"].lower() == "from"), ""),
+            "to": next((h["value"] for h in headers if h["name"].lower() == "to"), ""),
             "date": next((h["value"] for h in headers if h["name"].lower() == "date"), ""),
             "body": self._get_message_body(message["payload"]),
             "labelIds": message.get("labelIds", []),
