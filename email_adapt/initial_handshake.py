@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List
 from urllib.parse import quote_plus
 
-from email_adapt.database.vector_database import VectorStore
+from email_adapt.database.vector_store import VectorStore
 from email_adapt.gmail.src.api.threads import GmailThreadExtractor
 from email_adapt.gmail.src.extract_body import ExtractUserBodyFromEmail
 from email_adapt.gmail.src.user_profile import UserProfile
