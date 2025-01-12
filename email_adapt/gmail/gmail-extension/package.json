@@ -1,0 +1,14 @@
+{
+    "name": "gmail-extension",
+    "version": "1.0.0",
+    "description": "Gmail Thread Analyzer Extension",
+    "scripts": {
+      "watch": "nodemon --watch . --ext js,html,css --exec \"chrome-extension-reload\"",
+      "dev": "http-server . -p 8000"
+    },
+    "devDependencies": {
+      "http-server": "^14.1.1",
+      "nodemon": "^2.0.22",
+      "chrome-extension-reload": "^1.0.0"
+    }
+  }

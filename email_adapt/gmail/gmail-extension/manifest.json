@@ -1,0 +1,36 @@
+{
+  
+  "manifest_version": 3,
+  "name": "Gmail Thread Analyzer",
+  "version": "1.0",
+  "description": "Analyzes Gmail threads and communicates with backend",
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "https://mail.google.com/*",
+    "http://localhost:3000/*"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content/content.js"]
+    }
+  ]
+} 

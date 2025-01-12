@@ -20,6 +20,12 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.1",
     "tiktoken>=0.8.0",
+    "haystack-ai>=2.8.0",
+    "sentence-transformers>=3.3.1",
+    "qdrant-client>=1.12.2",
+    "python-dotenv>=1.0.1",
+    "crewai>=0.95.0",
+    "beautifulsoup4>=4.12.3",
 ]
 
 # Development Dependencies
@@ -36,7 +42,7 @@ dev = [
 
 # Build Configuration
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["email_adapt"]
 
 # Environment Configurations
 [tool.hatch.envs.default]
@@ -47,6 +53,7 @@ dependencies = [
 [tool.hatch.envs.default.scripts]
 check = "ruff check {args}"
 fix = "ruff check --fix {args}"
+unsafe-fix = "ruff check --unsafe-fixes {args}"
 format = "ruff format {args}"
 format-check = "ruff format --check {args}"
 
@@ -55,16 +62,17 @@ dependencies = [
     "pytest>=7.0",
     "mypy>=1.0",
     "pytest-cov>=4.1.0",
+    "pylint>=3.0.0",
 ]
 
 [tool.hatch.envs.test.scripts]
 e2e = "pytest e2e"
-unit = 'pytest --cov-report xml:coverage.xml --cov="src" -m "not integration" {args:test}'
+unit = 'pytest --cov-report xml:coverage.xml --cov="email_adapt" -m "not integration" {args:test}'
 integration = 'pytest --maxfail=5 -m "integration" {args:test}'
 integration-mac = 'pytest --maxfail=5 -m "integration" -k "not tika" {args:test}'
 integration-windows = 'pytest --maxfail=5 -m "integration" -k "not tika" {args:test}'
-types = "mypy --install-types --non-interactive --cache-dir=.mypy_cache/ {args:src}"
-lint = "pylint -ry -j 0 {args:src}"
+types = "mypy email_adapt --non-interactive --install-types"
+lint = "pylint -ry -j 0 {args:email_adapt}"
 
 # Code Formatting Tools
 [tool.black]
@@ -80,6 +88,10 @@ multi_line_output = 3
 python_version = "3.8"
 strict = true
 ignore_missing_imports = true
+cache_dir = ".mypy_cache"
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "email_adapt"
 
 [tool.ruff]
 line-length = 120
