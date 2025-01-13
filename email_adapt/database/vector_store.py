@@ -106,14 +106,14 @@ class VectorStore:
 
     def _delete_collection(self) -> bool:
         """Delete the entire collection from the vector database."""
-        logger.info(f"Attempting to delete collection: {self.collection_name}")
+        logger.info(f"[{self.__class__.__name__}] Attempting to delete collection: {self.collection_name}")
 
         try:
             self.client.delete_collection(collection_name=self.collection_name)
-            logger.info(f"Successfully deleted collection: {self.collection_name}")
+            logger.info(f"[{self.__class__.__name__}] Successfully deleted collection: {self.collection_name}")
             return True
         except Exception as e:
-            logger.error(f"Failed to delete collection {self.collection_name}: {e}")
+            logger.error(f"[{self.__class__.__name__}] Failed to delete collection {self.collection_name}: {e}")
             return False
 
     def index(self, texts: List[str], metadata: Optional[List[dict]] = None):
@@ -314,3 +314,4 @@ class VectorStore:
         except Exception as e:
             logger.error(f"[{self.__class__.__name__}] Failed to retrieve emails: {e}")
             raise
+
