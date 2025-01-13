@@ -10,6 +10,7 @@ qa.db
 **/*qa*.db
 **/test-reports
 storage/
+email_adapt/data/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -157,3 +158,6 @@ dmypy.json
 
 # Zed configs
 .zed/*
+
+# Manifest
+manifest.json
